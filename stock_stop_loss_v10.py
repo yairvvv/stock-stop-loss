@@ -45,7 +45,13 @@ def get_data(symbol, target_date=None):
         if target_date:
             end_dt = pd.to_datetime(target_date) + pd.Timedelta(days=1)
             start_dt = end_dt - pd.Timedelta(days=365 * 2)
-            df = yf.download(symbol, start=start_dt.strftime('%Y-%m-%d'), end=end_dt.strftime('%Y-%m-%d'), interval="1d", progress=False)
+            df = yf.download(
+                symbol, 
+                start=start_dt.strftime('%Y-%m-%d'), 
+                end=end_dt.strftime('%Y-%m-%d'), 
+                interval="1d", 
+                progress=False
+            )
         else:
             df = yf.download(symbol, period="2y", interval="1d", progress=False)
             
@@ -81,10 +87,44 @@ def market_regime(target_date):
     try:
         spy_raw = get_data("SPY", target_date)
         qqq_raw = get_data("QQQ", target_date)
-        if spy_raw.empty or qqq_raw.empty: return "NEUTRAL"
+        if spy_raw.empty or qqq_raw.empty: 
+            return "NEUTRAL"
         
         spy = add_indicators(spy_raw)
         qqq = add_indicators(qqq_raw)
         
-        spy_close, qqq_close = float(spy["Close"].iloc[-1]), float(qqq["Close"].iloc[-1])
-        spy_ma50, qqq_ma50 = float(spy["MA50"].iloc[-1]), float
+        # פיצול לשורות קצרות כדי למנוע שגיאות חיתוך קוד
+        spy_close = float(spy["Close"].iloc[-1])
+        qqq_close = float(qqq["Close"].iloc[-1])
+        spy_ma50 = float(spy["MA50"].iloc[-1])
+        qqq_ma50 = float(qqq["MA50"].iloc[-1])
+        
+        if spy_close > spy_ma50 and qqq_close > qqq_ma50: 
+            return "BULL"
+        elif spy_close > spy_ma50 or qqq_close > qqq_ma50: 
+            return "NEUTRAL"
+        return "CORRECTION"
+    except:
+        return "NEUTRAL (DATA ERR)"
+
+def relative_strength(symbol, target_date):
+    try:
+        stock_df = get_data(symbol, target_date)
+        spy_df = get_data("SPY", target_date)
+        if stock_df.empty or spy_df.empty or len(stock_df) < 21: 
+            return 0
+        
+        stock_return = float(stock_df["Close"].pct_change(20).iloc[-1])
+        spy_return = float(spy_df["Close"].pct_change(20).iloc[-1])
+        return round(stock_return / spy_return, 2) if spy_return != 0 else 0
+    except:
+        return 0
+
+def trade_quality(df, symbol, regime, rs):
+    if df.empty or len(df) < 20: 
+        return 0
+    last = df.iloc[-1]
+    score = 0
+    if float(last["Close"]) > float(last["MA50"]): score += 25
+    if float(last["Close"]) > float(last["High20"]): score += 25
+    vol_ratio = float(last["Volume"]) / float(last["AvgVolume20
